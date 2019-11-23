@@ -66,17 +66,17 @@ const mutations = {
         state.colors = state.colors.filter(c => c.id != colorId);
     },
 
-    ADD_COLOR_DATAPOINT(state, { x, y, z }) {
+    ADD_COLOR_DATAPOINT(state, { x, y, z, b }) {
         const activeColor = colorByColorId(state, state.activeColorId);
         if (!activeColor) return;
 
-        activeColor.datapoints.push({ x, y, z });
+        activeColor.datapoints.push([x, y, z, b]);
     }
 }
 
 const actions = {
-    addColorDatapoint({ state, commit }, { x, y, z }) {
-        commit("ADD_COLOR_DATAPOINT", { x, y, z });
+    addColorDatapoint({ state, commit }, { x, y, z, b }) {
+        commit("ADD_COLOR_DATAPOINT", { x, y, z, b });
     },
 
     setActiveColor({ state, commit }, colorId) {

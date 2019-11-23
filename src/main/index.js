@@ -18,7 +18,7 @@ let mainWindow, colorPickerWindow
 
 function createColorPickerWindow() {
   colorPickerWindow = new BrowserWindow({
-    width: 400,
+    width: 800,
     height: 465,
     useContentSize: true
   })
