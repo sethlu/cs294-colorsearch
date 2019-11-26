@@ -147,7 +147,7 @@ export default {
         chromaticityBuckets,
         intensityBuckets,
         null, // Don't care, as we're only requesting the boundary
-        [0.64, 0.33, 0.3, 0.6, 0.15, 0.06],
+        triangle,
         true
       );
 
