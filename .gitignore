@@ -7,6 +7,10 @@ node_modules/
 npm-debug.log
 npm-debug.log.*
 thumbs.db
+__pycache__/
 !.gitkeep
+
 .node-virtualenv/
 .vscode/
+
+images/

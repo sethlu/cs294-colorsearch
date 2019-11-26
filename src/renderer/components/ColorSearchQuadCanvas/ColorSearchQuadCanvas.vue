@@ -11,11 +11,17 @@
       <div class="color" @click="handlePickNewColor()">
         <div class="color-name">new</div>
       </div>
+      <div class="color" @click="handleSearch">
+        <div class="color-name">search</div>
+      </div>
     </div>
     <div class="color-search-quad-canvas-area">
       <drop @drop="handleColorDrop(i, ...arguments)" v-for="cell, i in grid">
         <color-search-quad-color :color="cell && cell.colorId ? colorByColorId(cell.colorId) : null"/>
       </drop>
+    </div>
+    <div class="color-search-quad-canvas-result">
+      TODO: Result
     </div>
   </div>
 </template>
@@ -27,15 +33,28 @@ import { mapGetters, mapActions } from 'vuex';
 import { Drag, Drop } from 'vue-drag-drop';
 import uuidv4 from 'uuid/v4';
 
+import { query } from '../../../lib/query';
+
 import ColorSearchQuadColorVue from './ColorSearchQuadColor.vue';
+
+function flat(a) {
+  const flattened = [];
+  function flatHelper(a) {
+    if (!Array.isArray(a)) return flattened.push(a);
+    a.forEach(flatHelper);
+  }
+  flatHelper(a);
+  return flattened;
+}
 
 export default {
   data: function () {
     return {
       grid: [
-        null, null, null,
-        null, null, null,
-        null, null, null
+        null, null, null, null,
+        null, null, null, null,
+        null, null, null, null,
+        null, null, null, null
       ]
     }
   },
@@ -78,6 +97,10 @@ export default {
 
     handleDeleteColor: function (colorId) {
       this.deleteColor(colorId);
+    },
+
+    handleSearch: async function () {
+      await query(flat(this.grid).map(i => i ? i.colorId : null));
     }
   }
 };
@@ -89,12 +112,12 @@ export default {
 .color-search-quad-canvas {
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 150px 1fr 1fr;
   border: 1px solid $color-border;
 
   .color-search-quad-canvas-area {
     display: grid;
-    grid-template-columns: repeat(3, 100px);
+    grid-template-columns: repeat(4, 100px);
     align-content: center;
     justify-content: center;
     grid-gap: 0.25em;
@@ -157,6 +180,10 @@ export default {
         margin: 0.25em;
       }
     }
+  }
+  
+  .color-search-quad-canvas-result {
+    border-left: 1px solid $color-border;
   }
 }
 </style>
