@@ -1,23 +1,25 @@
 <template>
-  <div class="color-picker" v-if="activeColorId">
+  <div class="color-picker">
     <div class="color-picker-info">
       <!-- <div class="color-picker-preview">
         <color-canvas :color="xyY"/>
-      </div> -->
-      <div class="color-picker-props">
-        Name <input v-model="name" />
+      </div>-->
+      <div class="color-picker-props" v-if="activeColor">
+        Name
+        <input v-model="name" />
       </div>
     </div>
     <canvas
       ref="canvas"
       class="color-picker-canvas"
-      width="400"
-      height="400"
       @wheel="handleCanvasWheel"
+      @click="handleCanvasClick"
     ></canvas>
     <div class="color-picker-classifier">
-      <div class="color-picker-classifier-prompt">Is this color {{ name }}?</div>
-      <color-canvas class="color-picker-classifier-preview" :color="userClassifierSample"/>
+      <div class="color-picker-classifier-prompt">
+        <span v-if="activeColor">Is this color {{ name }}?</span>
+      </div>
+      <color-canvas class="color-picker-classifier-preview" :color="userClassifierSample" />
       <div class="color-picker-classifier-actions">
         <button @click="handleUserClassifierResponse(true)">yes</button>
         <button @click="handleUserClassifierResponse(false)">no</button>
@@ -29,8 +31,26 @@
 <script>
 import { mapGetters, mapActions } from "vuex";
 
+import {
+  classifyColor,
+  makeTrainingDatapoints,
+  generateFillerDatapoints
+} from "../../../lib/classifier";
+import { range, inTriangle } from "../../../lib/utils.js";
+
 import ColorCanvasVue from "./ColorCanvas.vue";
-import { classifyColor } from "../../../lib/classifier";
+
+// sRGB
+const triangle = [0.64, 0.33, 0.3, 0.6, 0.15, 0.06];
+
+// Apple RGB
+// const triangle = [0.625, 0.34, 0.28, 0.595, 0.155, 0.07];
+
+// CIE XYZ
+// const triangle = [1, 0, 0, 1, 0, 0];
+
+// CIE (1931) RGB
+// const triangle = [0.7347, 0.2653, 0.2738, 0.7174, 0.1666, 0.0089];
 
 function mapActiveColorProps(props) {
   const getters = {};
@@ -38,7 +58,8 @@ function mapActiveColorProps(props) {
   for (let prop of props) {
     getters[prop] = {
       get() {
-        return this.$store.getters.activeColor[prop];
+        const activeColor = this.$store.getters.activeColor;
+        return activeColor ? activeColor[prop] : null;
       },
       set(val) {
         this.$store.dispatch("setActiveColorProps", { [prop]: val });
@@ -91,32 +112,78 @@ export default {
   },
 
   methods: {
-    ...mapActions([
-      'addColorDatapoint',
-    ]),
+    ...mapActions(["addColorDatapoint"]),
 
-    updateUserClassifierSample() {
-      const vertices = [0.64, 0.33, 0.3, 0.6, 0.15, 0.06];
-      function inTriangle(px, py, x0, y0, x1, y1, x2, y2) {
-        function leftOfLine(px, py, ax, ay, bx, by) {
-          let dx = bx - ax;
-          let dy = by - ay;
-          let nx = -dy;
-          let ny = dx;
-          let tx = px - ax;
-          let ty = py - ay;
-          return nx * tx + ny * ty > 0;
-        }
-        let t1 = leftOfLine(px, py, x0, y0, x1, y1);
-        let t2 = leftOfLine(px, py, x1, y1, x2, y2);
-        let t3 = leftOfLine(px, py, x2, y2, x0, y0);
-        return t1 == t2 && t2 == t3;
-      }
-
+    /**
+     * Samples a color randomly
+     */
+    updateUserClassifierSampleRandom() {
       let sample;
       do {
         sample = [Math.random(), Math.random(), Math.random()];
-      } while (!inTriangle(sample[0], sample[1], ...vertices));
+      } while (!inTriangle(sample[0], sample[1], ...triangle));
+
+      this.userClassifierSample = sample;
+    },
+
+    /**
+     * Samples a color based on the binary user input collected thus far
+     * It randomly samples at positions inside & around the decision boundary so users trying to create a "magenta" color model won't see randomly chosen green colors for classifying
+     */
+    updateUserClassifierSampleBoundary() {
+      if (!this.activeColor) {
+        console.log(
+          "Cannot sample gradient without active color, fallback to random sampling"
+        );
+        this.updateUserClassifierSampleRandom();
+        return;
+      }
+
+      const chromaticityBuckets = 6;
+      const intensityBuckets = 6;
+
+      const boundary = generateFillerDatapoints(
+        this.activeColor.datapoints,
+        chromaticityBuckets,
+        intensityBuckets,
+        null, // Don't care, as we're only requesting the boundary
+        [0.64, 0.33, 0.3, 0.6, 0.15, 0.06],
+        true
+      );
+
+      if (boundary.length == 0) {
+        console.log("No boundary found, fallback to random sampling");
+        this.updateUserClassifierSampleRandom();
+        return;
+      }
+
+      let sample;
+      let trials = 1000;
+      do {
+        if (trials-- == 0) {
+          console.log("Running out of trials, fallback to random sampling");
+          this.updateUserClassifierSampleRandom();
+          return;
+        }
+
+        const bucket =
+          boundary[
+            Math.min(
+              Math.floor(Math.random() * boundary.length),
+              boundary.length - 1
+            )
+          ];
+
+        sample = [
+          bucket[0] + (Math.random() - 0.5) / chromaticityBuckets,
+          bucket[1] + (Math.random() - 0.5) / chromaticityBuckets,
+          bucket[2] + (Math.random() - 0.5) / intensityBuckets
+        ];
+      } while (
+        !inTriangle(sample[0], sample[1], ...triangle) ||
+        sample[2] < 0 ||
+        sample[2] > 1
+      );
 
       this.userClassifierSample = sample;
     },
@@ -124,13 +191,15 @@ export default {
     async handleUserClassifierResponse(response) {
       let [x, y, z] = this.userClassifierSample;
       let b = response ? 1 : 0;
-      this.addColorDatapoint({ x, y, z, b });
-  
-      this.perceptron = await classifyColor(this.activeColorId);
+
+      await this.$store.dispatch("addColorDatapoint", { x, y, z, b });
+
+      const perceptron = await classifyColor(this.activeColorId, triangle);
+      await this.$store.dispatch("setActiveColorProps", { perceptron });
 
       this.redraw();
 
-      this.updateUserClassifierSample();
+      this.updateUserClassifierSampleBoundary();
     },
 
     async handleCanvasClick(event) {
@@ -141,16 +210,13 @@ export default {
         1 -
         (event.pageY - this.$refs.canvas.offsetTop) /
           this.$refs.canvas.offsetHeight;
-      this.xyY = [x, y, 1];
-      this.addColorDatapoint({ x: x, y: y, z: 1, b: event.shiftKey ? 0 : 1});
+      const xyY = [x, y, this.colorY];
 
-      this.perceptron = await classifyColor(this.activeColorId);
-
-      this.redraw();
+      this.userClassifierSample = xyY;
     },
 
     handleCanvasWheel(event) {
-      this.colorY = Math.min(1, Math.max(0, this.colorY + event.deltaY / 500));
+      this.colorY = Math.min(1, Math.max(0, this.colorY + event.deltaY / 1000));
       this.redraw();
     },
 
@@ -161,35 +227,119 @@ export default {
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clear(gl.COLOR_BUFFER_BIT);
 
-      if (!this.perceptron) return;
+      // Draw diagram with perceptron classified area highlighted
+      {
+        gl.useProgram(this.program);
+        gl.uniform1f(this.colorYLocation, this.colorY);
 
-      const flatPerceptronWeights = this.flatPerceptronWeights;
-      const flatPerceptronIntercepts = this.flatPerceptronIntercepts;
+        if (this.perceptron) {
+          const flatPerceptronWeights = this.flatPerceptronWeights;
+          const flatPerceptronIntercepts = this.flatPerceptronIntercepts;
 
-      // console.log("Perceptron weights", flatPerceptronWeights);
-      // console.log("Perceptron intercepts", flatPerceptronIntercepts);
+          // console.log("Perceptron weights", flatPerceptronWeights);
+          // console.log("Perceptron intercepts", flatPerceptronIntercepts);
 
-      const std140perceptron = new Float32Array((this.perceptron.mean.length + this.perceptron.scale.length + flatPerceptronWeights.length + flatPerceptronIntercepts.length) * 4);
-      this.perceptron.mean.forEach((v, i) => 
-        std140perceptron[i * 4] = v);
-      this.perceptron.scale.forEach((v, i) => 
-        std140perceptron[(this.perceptron.mean.length + i) * 4] = v);
-      flatPerceptronWeights.forEach((v, i) => 
-        std140perceptron[(this.perceptron.mean.length + this.perceptron.scale.length + i) * 4] = v);
-      flatPerceptronIntercepts.forEach((v, i) => 
-        std140perceptron[(this.perceptron.mean.length + this.perceptron.scale.length + flatPerceptronWeights.length + i) * 4] = v);
+          const std140perceptron = new Float32Array(
+            (this.perceptron.mean.length +
+              this.perceptron.scale.length +
+              flatPerceptronWeights.length +
+              flatPerceptronIntercepts.length) *
+              4
+          );
+          this.perceptron.mean.forEach((v, i) => (std140perceptron[i * 4] = v));
+          this.perceptron.scale.forEach(
+            (v, i) =>
+              (std140perceptron[(this.perceptron.mean.length + i) * 4] = v)
+          );
+          flatPerceptronWeights.forEach(
+            (v, i) =>
+              (std140perceptron[
+                (this.perceptron.mean.length +
+                  this.perceptron.scale.length +
+                  i) *
+                  4
+              ] = v)
+          );
+          flatPerceptronIntercepts.forEach(
+            (v, i) =>
+              (std140perceptron[
+                (this.perceptron.mean.length +
+                  this.perceptron.scale.length +
+                  flatPerceptronWeights.length +
+                  i) *
+                  4
+              ] = v)
+          );
 
-      gl.bindBuffer(gl.UNIFORM_BUFFER, this.perceptronBuffer);
-      gl.bufferData(gl.UNIFORM_BUFFER, std140perceptron, gl.DYNAMIC_DRAW);
-      gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+          gl.bindBuffer(gl.UNIFORM_BUFFER, this.perceptronBuffer);
+          gl.bufferData(gl.UNIFORM_BUFFER, std140perceptron, gl.DYNAMIC_DRAW);
+          gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+        } else {
+          // No perceptron
 
-      gl.useProgram(this.program);
-      gl.uniform1f(this.colorYLocation, this.colorY);
-      this.perceptronWeightsBlockIndex = gl.getUniformBlockIndex(this.program, "PerceptronBlock");
-      gl.uniformBlockBinding(this.program, this.perceptronWeightsBlockIndex, 1);
-      gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, this.perceptronBuffer);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-      gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+          const std140perceptron = new Float32Array(507 * 4);
+
+          gl.bindBuffer(gl.UNIFORM_BUFFER, this.perceptronBuffer);
+          gl.bufferData(gl.UNIFORM_BUFFER, std140perceptron, gl.DYNAMIC_DRAW);
+          gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+        }
+
+        gl.uniform1i(
+          gl.getUniformLocation(this.program, "flag_use_perceptron"),
+          this.perceptron ? 1 : 0
+        );
+
+        gl.uniformBlockBinding(
+          this.program,
+          this.perceptronWeightsBlockIndex,
+          1
+        );
+        gl.bindBufferBase(gl.UNIFORM_BUFFER, 1, this.perceptronBuffer);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+        gl.vertexAttribPointer(this.coordLocation, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(this.coordLocation);
+
+        gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+      }
+
+      // Plot points
+      if (this.activeColor) {
+        const datapoints = makeTrainingDatapoints(
+          this.activeColor.datapoints,
+          -1
+        ).filter(v => Math.abs(v[2] - this.colorY) < 1 / 32);
+
+        if (datapoints.length > 0) {
+          const points = new Float32Array(datapoints.length * 4);
+          datapoints.forEach((v, i) => {
+            points[i * 4] = v[0];
+            points[i * 4 + 1] = v[1];
+            points[i * 4 + 2] = v[2];
+            points[i * 4 + 3] = v[3];
+          });
+
+          gl.useProgram(this.pointProgram);
+
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, this.pointVertexBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, points, gl.DYNAMIC_DRAW);
+          gl.vertexAttribPointer(
+            this.pointProgramCoordLocation,
+            4,
+            gl.FLOAT,
+            false,
+            0,
+            0
+          );
+          gl.enableVertexAttribArray(this.pointProgramCoordLocation);
+
+          gl.drawArrays(gl.POINTS, 0, datapoints.length);
+        }
+      }
     }
   },
 
@@ -199,40 +349,23 @@ export default {
     }
   },
 
-  created: function () {
-    this.updateUserClassifierSample();
+  created: function() {
+    this.updateUserClassifierSampleBoundary();
   },
 
   mounted: function() {
     const canvas = this.$refs.canvas;
 
-    canvas.style.width = `${canvas.width}px`;
-    canvas.style.height = `${canvas.height}px`;
-
-    canvas.width = canvas.width * window.devicePixelRatio;
-    canvas.height = canvas.height * window.devicePixelRatio;
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
 
     const gl = canvas.getContext("webgl2");
 
-    // sRGB
-    const vertices = [0.64, 0.33, 0.3, 0.6, 0.15, 0.06];
-
-    // Apple RGB
-    // const vertices = [0.625, 0.34, 0.28, 0.595, 0.155, 0.07];
-
-    // CIE XYZ
-    // const vertices = [1, 0, 0, 1, 0, 0];
-
-    // CIE (1931) RGB
-    // const vertices = [0.7347, 0.2653, 0.2738, 0.7174, 0.1666, 0.0089];
-
     const indices = [0, 1, 2];
 
-    const color = [0.3, 0.4, 0.5];
-
-    const vertexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    this.vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(triangle), gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
     this.indexBuffer = gl.createBuffer();
@@ -245,6 +378,8 @@ export default {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
     this.perceptronBuffer = gl.createBuffer();
+
+    this.pointVertexBuffer = gl.createBuffer();
 
     const vertexShaderSource = `#version 300 es
 
@@ -260,24 +395,37 @@ export default {
       }
     `;
 
-    function range(n) {
-      return [...Array(n).keys()];
-    }
-
-    let weights = 0, intercepts = 0;
+    let weights = 0,
+      intercepts = 0;
     function genLayer(prev, prevDim, cur, curDim, activation) {
       return `
         float ${cur}[${curDim}];
         // Intercepts
-        ${range(curDim).map(i => `${cur}[${i}] = perceptron.intercepts[${intercepts++}];`).join(" ")}
+        ${range(curDim)
+          .map(i => `${cur}[${i}] = perceptron.intercepts[${intercepts++}];`)
+          .join(" ")}
         // Weights
-        ${range(prevDim * curDim).map((i) => `${cur}[${i % curDim}] += ${prev}[${Math.floor(i / curDim)}] * perceptron.weights[${weights++}];`).join(" ")}
+        ${range(prevDim * curDim)
+          .map(
+            i =>
+              `${cur}[${i % curDim}] += ${prev}[${Math.floor(
+                i / curDim
+              )}] * perceptron.weights[${weights++}];`
+          )
+          .join(" ")}
         // Activation
-        ${activation == "relu" ?
-          `${range(curDim).map(i => `${cur}[${i}] = max(0.0, ${cur}[${i}]);`).join(" ")} // ReLU` :
-          activation == "tanh" ?
-            `${range(curDim).map(i => `${cur}[${i}] = tanh(${cur}[${i}]);`).join(" ")} // tanh` :
-            `${range(curDim).map(i => `${cur}[${i}] = 1.0 / (1.0 + exp(-${cur}[${i}]));`).join(" ")} // Logistic`
+        ${
+          activation == "relu"
+            ? `${range(curDim)
+                .map(i => `${cur}[${i}] = max(0.0, ${cur}[${i}]);`)
+                .join(" ")} // ReLU`
+            : activation == "tanh"
+            ? `${range(curDim)
+                .map(i => `${cur}[${i}] = tanh(${cur}[${i}]);`)
+                .join(" ")} // tanh`
+            : `${range(curDim)
+                .map(i => `${cur}[${i}] = 1.0 / (1.0 + exp(-${cur}[${i}]));`)
+                .join(" ")} // Logistic`
         }`;
     }
 
@@ -295,6 +443,8 @@ export default {
       } perceptron;
 
       uniform float Y;
+
+      uniform bool flag_use_perceptron;
 
       in vec2 xy;
 
@@ -337,10 +487,10 @@ export default {
         // fragmentColor = vec4(c, c, c, 1);
         // return;
 
-        if (c > 0.5) {
+        if (!flag_use_perceptron || c > 0.5) {
           if (sRGB.x < 0.0 || sRGB.y < 0.0 || sRGB.z < 0.0) {
             fragmentColor = vec4(0, 0, 0, 1);
-          } else {    
+          } else {
             fragmentColor = vec4(gammaCorrected, 1);
           }
         } else {
@@ -349,35 +499,103 @@ export default {
       }
     `;
 
-    console.log(fragmentShaderSource);
+    console.log("Fragment shader source", fragmentShaderSource);
+
+    const pointVertexShaderSource = `#version 300 es
+
+      precision mediump float;
+
+      in vec4 xyYb;
+
+      out float b;
+      out float radius;
+
+      void main(void) {
+        vec2 coordinates = xyYb.xy;
+        gl_Position = vec4(coordinates * 2.0 - vec2(1.0), 0.0, 1.0);
+        if (xyYb[3] == 1.0) {
+          radius = 10.0;
+        } else if (xyYb[3] == 0.0) {
+          radius = 4.0;
+        } else if (xyYb[3] == -1.0) {
+          radius = 2.0;
+        }
+        gl_PointSize = 2.0 * radius;
+      }
+    `;
+
+    const pointFragmentShaderSource = `#version 300 es
+
+      precision mediump float;
+
+      in float b;
+      in float radius;
+
+      out vec4 fragmentColor;
+
+      void main(void) {
+        float dist = length(gl_PointCoord - vec2(0.5, 0.5)) * 2.0 * radius;
+        if (abs(dist - (radius - 2.0)) > 2.0) {
+          discard;
+        }
+
+        // fragmentColor = vec4(1.0, 1.0, 1.0, 1);
+        fragmentColor = vec4(0, 0, 0, 0);
+      }
+    `;
 
     const vertexShader = gl.createShader(gl.VERTEX_SHADER);
     gl.shaderSource(vertexShader, vertexShaderSource);
     gl.compileShader(vertexShader);
 
-    console.log(gl.getShaderInfoLog(vertexShader));
+    console.log("Vertex shader", gl.getShaderInfoLog(vertexShader));
 
     const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
     gl.shaderSource(fragmentShader, fragmentShaderSource);
     gl.compileShader(fragmentShader);
 
-    console.log(gl.getShaderInfoLog(fragmentShader));
+    console.log("Fragment shader", gl.getShaderInfoLog(fragmentShader));
+
+    const pointVertexShader = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(pointVertexShader, pointVertexShaderSource);
+    gl.compileShader(pointVertexShader);
+
+    console.log("Point vertex shader", gl.getShaderInfoLog(pointVertexShader));
+
+    const pointFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(pointFragmentShader, pointFragmentShaderSource);
+    gl.compileShader(pointFragmentShader);
+
+    console.log(
+      "Point fragment shader",
+      gl.getShaderInfoLog(pointFragmentShader)
+    );
+
+    // Diagram program
 
     this.program = gl.createProgram();
     gl.attachShader(this.program, vertexShader);
     gl.attachShader(this.program, fragmentShader);
     gl.linkProgram(this.program);
 
-    const coordLocation = gl.getAttribLocation(this.program, "coordinates");
+    this.coordLocation = gl.getAttribLocation(this.program, "coordinates");
     this.colorYLocation = gl.getUniformLocation(this.program, "Y");
+    this.perceptronWeightsBlockIndex = gl.getUniformBlockIndex(
+      this.program,
+      "PerceptronBlock"
+    );
 
-    gl.useProgram(this.program);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-    {
-      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-      gl.vertexAttribPointer(coordLocation, 2, gl.FLOAT, false, 0, 0);
-      gl.enableVertexAttribArray(coordLocation);
-    }
+    // Point program
+
+    this.pointProgram = gl.createProgram();
+    gl.attachShader(this.pointProgram, pointVertexShader);
+    gl.attachShader(this.pointProgram, pointFragmentShader);
+    gl.linkProgram(this.pointProgram);
+
+    this.pointProgramCoordLocation = gl.getAttribLocation(
+      this.pointProgram,
+      "xyYb"
+    );
 
     this.redraw();
   }
@@ -389,10 +607,11 @@ export default {
 
 .color-picker {
   display: grid;
-  grid-template-areas: "info classifier"
-                       "canvas classifier";
-  grid-template-rows: 1fr 400px;
-  grid-template-columns: 400px 1fr;
+  grid-template-areas:
+    "info classifier"
+    "canvas classifier";
+  grid-template-rows: 1fr 500px;
+  grid-template-columns: 500px 1fr;
   flex-direction: column;
   background-color: $color-gray-tint;
 
@@ -422,6 +641,8 @@ export default {
     grid-area: canvas;
     border-top: 1px solid $color-border;
     background-color: hsl(0, 0, 25%);
+    width: 100%;
+    height: 100%;
   }
 
   .color-picker-classifier {
