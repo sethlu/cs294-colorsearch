@@ -48,8 +48,7 @@ def computeAllColorScores(img, splitDim, color_functions):
                 for y in range(startVertIdx, endVertIdx):
                     for k in range(len(color_functions)):
                         color_f = color_functions[k]
-                        if (color_f(img[x][y])):
-                            result[i][j][k] += 1
+                        result[i][j][k] += color_f(img[x][y])
 
     return result
 
