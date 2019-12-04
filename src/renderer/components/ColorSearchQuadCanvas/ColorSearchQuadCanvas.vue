@@ -11,9 +11,6 @@
       <div class="color" @click="handlePickNewColor()">
         <div class="color-name">new</div>
       </div>
-      <div class="color" @click="handleSearch">
-        <div class="color-name">search</div>
-      </div>
     </div>
     <div class="color-search-quad-canvas-area">
       <drop @drop="handleColorDrop(i, ...arguments)" v-for="cell, i in grid">
@@ -21,7 +18,9 @@
       </drop>
     </div>
     <div class="color-search-quad-canvas-result">
-      TODO: Result
+      <button @click="handleSelectDirectory()">Choose directory</button>
+      <div>{{ directory }}</div>
+      <button @click="handleSearch()">Search</button>
     </div>
   </div>
 </template>
@@ -55,7 +54,8 @@ export default {
         null, null, null, null,
         null, null, null, null,
         null, null, null, null
-      ]
+      ],
+      directory: "No Directory Selected",
     }
   },
 
@@ -100,8 +100,17 @@ export default {
     },
 
     handleSearch: async function () {
-      await query(flat(this.grid).map(i => i ? i.colorId : null));
-    }
+      await query(this.directory, flat(this.grid).map(i => i ? i.colorId : null));
+    },
+
+    handleSelectDirectory: async function () {
+      this.directory = await new Promise((resolve) => {
+        ipcRenderer.send('choose-directory');
+        ipcRenderer.on('choose-directory', (event, dir) => {
+          resolve(dir);
+        });
+      });
+    },
   }
 };
 </script>

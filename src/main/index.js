@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 
 import '../renderer/store';
 
@@ -64,4 +64,12 @@ app.on('activate', () => {
 ipcMain.on('focus-color-picker-window', (event, arg) => {
   if (!colorPickerWindow) createColorPickerWindow();
   // colorPickerWindow.focus();
+})
+
+ipcMain.on('choose-directory', (event) => {
+  const directories = dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
+  })
+
+  event.sender.send('choose-directory', directories[0])
 })

@@ -1,7 +1,7 @@
 import store from '../renderer/store';
 import { PythonShell } from 'python-shell';
 
-function query(canvas) {
+function query(directory, canvas) {
     return new Promise((resolve, reject) => {
         const palette = {};
 
@@ -15,7 +15,7 @@ function query(canvas) {
             pythonPath: `${__dirname}/../../.node-virtualenv/bin/python3`
         });
         pyshell.send(JSON.stringify({
-            palette, canvas
+            directory, palette, canvas
         }));
         const buffer = [];
         pyshell.on('message', (message) => {
