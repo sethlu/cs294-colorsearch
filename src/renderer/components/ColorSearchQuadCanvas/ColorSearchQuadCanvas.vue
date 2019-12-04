@@ -18,9 +18,14 @@
       </drop>
     </div>
     <div class="color-search-quad-canvas-result">
-      <button @click="handleSelectDirectory()">Choose directory</button>
+      <div>
+        <button @click="handleSelectDirectory()">Choose directory</button>
+        <button @click="handleSearch()">Search</button>
+      </div>
       <div>{{ directory }}</div>
-      <button @click="handleSearch()">Search</button>
+      <div>
+        <img :src="'file://' + directory + '/' + image" v-for="image in searchResultImages" v-if="searchResultImages" width="50">
+      </div>
     </div>
   </div>
 </template>
@@ -56,6 +61,7 @@ export default {
         null, null, null, null
       ],
       directory: "No Directory Selected",
+      searchResultImages: [],
     }
   },
 
@@ -100,7 +106,9 @@ export default {
     },
 
     handleSearch: async function () {
-      await query(this.directory, flat(this.grid).map(i => i ? i.colorId : null));
+      const images = await query(this.directory, flat(this.grid).map(i => i ? i.colorId : null));
+      console.log(images);
+      this.searchResultImages = images;
     },
 
     handleSelectDirectory: async function () {

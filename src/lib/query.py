@@ -45,61 +45,44 @@ def make_perceptron_classifier(coefs=None, intercepts=None, mean=None, scale=Non
 
 # Query Handling
 
-def handle_query(palette, canvas):
+def handle_query(directory, palette, canvas):
     """
     Parameters
-        palette: list of functions
-        canvas: list of palette indexes
+        directory: folder containing images
+        palette: maps color ids to functions
+        canvas: list of color ids
 
     Return value
         list of strings (file names)
     """
 
-    #canvas_matrix = np.reshape(canvas, (4, 4))
     split_dim = 4
-    """canvas_matrix = np.zeros((split_dim, split_dim, len(palette)))
-    canvas_idx = 0
-    for i in range(split_dim):
-        for j in range(split_dim):
-            canvas_matrix[i][j][canvas[canvas_idx]] = 1
-            canvas_idx += 1
-"""
-    # TODO: Will need to return the matching images instead of displaying them with matplotlib
 
-    from image_processing import load_images, sortImagesByMatch, sortImagesByMatchRevised
-    from PIL import Image
-    #import matplotlib.pyplot as plt
-
-    img_directory = "./images/sky"
-    imgs = load_images(img_directory)
+    from image_processing import load_images, sortImagesByMatchRevised
+    
+    imgs = load_images(directory)
     result = sortImagesByMatchRevised(imgs, canvas, split_dim, palette)
-    result_imgs = []
-    for filename in result :
-        result_imgs.append(Image.open(os.path.join(img_directory, filename)))
-    eprint(result)
-    """
-    fig = plt.figure(figsize=(8, 8))
-    columns = 5
-    rows = 1
-    for i in range(1, columns*rows + 1):
-        img = result_imgs[i - 1]
-        fig.add_subplot(rows, columns, i)
-        plt.imshow(img)
-    plt.show()
-"""
-    # TODO: To return a list of images in sorted order
-    return []
+
+    # result_imgs = []
+    # for filename in result:
+    #     result_imgs.append(Image.open(os.path.join(directory, filename)))
+
+    return result
 
 
 # Request Parsing
 
 query = json.loads(input())
 
-palette = {color_id: make_perceptron_classifier(**color['perceptron']) for color_id, color in query['palette'].items()}
+directory = query['directory']
+palette = {color_id: make_perceptron_classifier(
+    **color['perceptron']) for color_id, color in query['palette'].items()}
 canvas = query['canvas']
 
-eprint(palette, canvas)
+eprint("Directory:", directory, flush=True)
+eprint("Palette:", palette, flush=True)
+eprint("Canvas:", canvas, flush=True)
 
 # Pass back the search results
 
-print(json.dumps(handle_query(palette, canvas)))
+print(json.dumps(handle_query(directory, palette, canvas)))
