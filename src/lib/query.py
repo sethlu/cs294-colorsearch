@@ -39,7 +39,7 @@ def make_perceptron_classifier(coefs=None, intercepts=None, mean=None, scale=Non
         # Activation
         z = 1 / (1 + np.exp(-z))  # Logistic
 
-        return z[0]
+        return z[0] > 0.5
     return classifier
 
 

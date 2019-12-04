@@ -1,12 +1,12 @@
 <template>
   <div class="color-picker">
     <div class="color-picker-info">
-      <!-- <div class="color-picker-preview">
-        <color-canvas :color="xyY"/>
-      </div>-->
       <div class="color-picker-props" v-if="activeColor">
         Name
         <input v-model="name" />
+      </div>
+      <div v-else>
+        No Color Selected
       </div>
     </div>
     <canvas
@@ -610,31 +610,15 @@ export default {
   grid-template-areas:
     "info classifier"
     "canvas classifier";
-  grid-template-rows: 1fr 500px;
+  grid-template-rows: 3.5em 500px;
   grid-template-columns: 500px 1fr;
   flex-direction: column;
   background-color: $color-gray-tint;
 
   .color-picker-info {
     grid-area: info;
-    display: flex;
-    padding: 8px;
-
-    .color-picker-preview {
-      flex: none;
-      margin-right: 8px;
-
-      canvas {
-        box-sizing: border-box;
-        width: 48px;
-        height: 48px;
-        border: 1px solid $color-border;
-      }
-    }
-
-    .color-picker-props {
-      flex: 1 0 auto;
-    }
+    padding: 1em;
+    line-height: 1.5;
   }
 
   .color-picker-canvas {
@@ -652,7 +636,7 @@ export default {
     display: flex;
     flex-direction: column;
     text-align: center;
-    padding: 8px;
+    padding: 1em;
     justify-content: space-between;
 
     .color-picker-classifier-preview {

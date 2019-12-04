@@ -1,15 +1,20 @@
 <template>
   <div class="color-search-quad-canvas">
+    <div class="color-search-quad-canvas-bar">
+      <div class="directory">{{ directory ? directory : "No Directory Selected" }}</div>
+      <button @click="handleSelectDirectory()">Select Directory</button>
+      <button @click="handleSearch()" :disabled="!directory">Search</button>
+    </div>
     <div class="color-search-quad-canvas-palette">
       <div class="color" v-for="color in colors" @click="handlePickColor(color.id)">
         <div class="color-name">{{ color.name }}</div>
         <drag class="color-blob" :transfer-data="color">
           <color-search-quad-color :color="color"/>
         </drag>
-        <div @click.stop="handleDeleteColor(color.id)">x</div>
+        <div @click.stop="handleDeleteColor(color.id)">&nbsp;x&nbsp;</div>
       </div>
       <div class="color" @click="handlePickNewColor()">
-        <div class="color-name">new</div>
+        <div class="color-name">+ New Color</div>
       </div>
     </div>
     <div class="color-search-quad-canvas-area">
@@ -18,13 +23,17 @@
       </drop>
     </div>
     <div class="color-search-quad-canvas-result">
-      <div>
-        <button @click="handleSelectDirectory()">Choose directory</button>
-        <button @click="handleSearch()">Search</button>
+      <div v-if="searchStatus">
+        Searching...
       </div>
-      <div>{{ directory }}</div>
-      <div>
-        <img :src="'file://' + directory + '/' + image" v-for="image in searchResultImages" v-if="searchResultImages" width="50">
+      <div class="color-search-quad-canvas-result-wrapper" v-else-if="searchResultImages.length > 0">
+        <div class="result-title">Search results</div>
+        <div class="result-entry" v-for="image in searchResultImages" :key="image">
+          <img :src="'file://' + directory + '/' + image">
+        </div>
+      </div>
+      <div v-else>
+        No search results.
       </div>
     </div>
   </div>
@@ -60,8 +69,9 @@ export default {
         null, null, null, null,
         null, null, null, null
       ],
-      directory: "No Directory Selected",
+      directory: "",
       searchResultImages: [],
+      searchStatus: false,
     }
   },
 
@@ -106,9 +116,11 @@ export default {
     },
 
     handleSearch: async function () {
+      this.searchStatus = true;
       const images = await query(this.directory, flat(this.grid).map(i => i ? i.colorId : null));
       console.log(images);
       this.searchResultImages = images;
+      this.searchStatus = false;
     },
 
     handleSelectDirectory: async function () {
@@ -129,10 +141,50 @@ export default {
 .color-search-quad-canvas {
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 150px 1fr 1fr;
+  grid-template-areas:
+    "bar bar result"
+    "palette canvas result";
+  grid-template-columns: 12em 1fr 1fr;
+  grid-template-rows: 3em 1fr;
   border: 1px solid $color-border;
 
+  .color-search-quad-canvas-bar {
+    grid-area: bar;
+    display: flex;
+    background-color: $color-gray-tint;
+    border-bottom: 1px solid $color-border;
+
+    button {
+      flex: none;
+      -webkit-appearance: none;
+      border: none;
+      border-left: 1px solid $color-border;
+      background: transparent;
+      font-size: 1em;
+      padding: 0 1em;
+      transition: background-color ease 0.1s, color ease 0.1s;
+
+      &:not(:disabled):hover {
+        background-color: $color-accent-tint;
+        color: #FFF;
+      }
+
+      &:disabled {
+        color: $color-border;
+      }
+    }
+
+    .directory {
+      flex: 1 1 auto;
+      line-height: 3em;
+      padding: 0 1em;
+      overflow-x: auto;
+      white-space: nowrap;
+    }    
+  }
+
   .color-search-quad-canvas-area {
+    grid-area: canvas;
     display: grid;
     grid-template-columns: repeat(4, 100px);
     align-content: center;
@@ -161,31 +213,27 @@ export default {
   }
 
   .color-search-quad-canvas-palette {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    border-top-left-radius: 1.5em;
-    border-bottom-left-radius: 1.5em;
-
+    grid-area: palette;
+    border-right: 1px solid $color-border;
+    background-color: $color-gray-tint;
+    overflow-y: auto;
+    
     .color {
       height: 3em;
-      background-color: $color-gray-tint;
       display: flex;
       align-items: center;
 
-      border-right: 1px solid $color-border;
       border-top: 1px solid $color-border;
       &:first-child {
-        border-top-right-radius: 6px;
-      }
-      &:last-child {
-        border-bottom: 1px solid $color-border;
-        border-bottom-right-radius: 6px;
+        border-top: none;
       }
 
       .color-name {
         flex: 1;
         margin-left: 1em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .color-blob {
@@ -200,7 +248,28 @@ export default {
   }
   
   .color-search-quad-canvas-result {
+    grid-area: result;
     border-left: 1px solid $color-border;
+    padding: 1em;
+    overflow-y: auto;
+
+    .color-search-quad-canvas-result-wrapper {
+      max-width: 30em;
+      margin: 0 auto;
+    }
+
+    .result-title {
+
+    }
+
+    .result-entry {
+      margin: 1em 0 0 0;
+    }
+
+    img {
+      display: block;
+      width: 100%;
+    }
   }
 }
 </style>

@@ -177,8 +177,11 @@ def findBestMatchesRevised(color_scores, input_profile, split_dim) :
         totalScore = 0
         for i in range(split_dim) :
             for j in range(split_dim) :
-                totalScore += scores[input_profile[j + split_dim * i]][i][j] 
-        stuff[file_name] = totalScore
+                color = input_profile[j + split_dim * i]
+                if color is not None:
+                    totalScore += scores[color][i][j]
+        if totalScore != 0:
+            stuff[file_name] = totalScore
         k += 1
     return sorted(stuff, key=stuff.get, reverse=True)
 

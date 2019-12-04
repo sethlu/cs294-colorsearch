@@ -4,6 +4,8 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
 
+from utils import eprint
+
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -19,6 +21,8 @@ y = [datapoint[-1] for datapoint in datapoints]
 
 ss = StandardScaler()
 X = ss.fit_transform(X)
+
+eprint(X, y, flush=True)
 
 clf = MLPClassifier(solver='adam', alpha=1e-5, max_iter=1000, hidden_layer_sizes=(100,))
 clf.fit(X, y)

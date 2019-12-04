@@ -19,7 +19,7 @@ let mainWindow, colorPickerWindow
 function createColorPickerWindow() {
   colorPickerWindow = new BrowserWindow({
     width: 900,
-    height: 565,
+    height: 556,
     useContentSize: true
   })
 
@@ -35,7 +35,7 @@ function createMainWindow() {
    * Initial window options
    */
   mainWindow = new BrowserWindow({
-    width: 800,
+    width: 1000,
     height: 600,
     useContentSize: true,
     webPreferences: {
@@ -66,7 +66,7 @@ app.on('activate', () => {
 
 ipcMain.on('focus-color-picker-window', (event, arg) => {
   if (!colorPickerWindow) createColorPickerWindow();
-  // colorPickerWindow.focus();
+  colorPickerWindow.focus();
 })
 
 ipcMain.on('choose-directory', (event) => {

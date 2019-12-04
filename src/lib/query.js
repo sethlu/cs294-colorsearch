@@ -5,10 +5,13 @@ function query(directory, canvas) {
     return new Promise((resolve, reject) => {
         const palette = {};
 
+        const canvasColors = new Set(canvas);
         for (let color of store.getters.colors) {
-            palette[color.id] = {
-                "perceptron": color.perceptron
-            };
+            if (canvasColors.has(color.id) && !palette[color.id]) {
+                palette[color.id] = {
+                    "perceptron": color.perceptron
+                };
+            }
         }
 
         let pyshell = new PythonShell(`${__dirname}/query.py`, {
