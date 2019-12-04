@@ -1,7 +1,10 @@
 import json
 
+import os
 import numpy as np
 import skimage.color
+
+from utils import eprint
 
 
 # Perceptron
@@ -54,30 +57,36 @@ def handle_query(palette, canvas):
 
     #canvas_matrix = np.reshape(canvas, (4, 4))
     split_dim = 4
-    canvas_matrix = np.zeros((split_dim, split_dim, len(palette)))
+    """canvas_matrix = np.zeros((split_dim, split_dim, len(palette)))
     canvas_idx = 0
     for i in range(split_dim):
         for j in range(split_dim):
             canvas_matrix[i][j][canvas[canvas_idx]] = 1
             canvas_idx += 1
-
+"""
     # TODO: Will need to return the matching images instead of displaying them with matplotlib
 
-    from image_processing import load_images, sortImagesByMatch
-    import matplotlib.pyplot as plt
+    from image_processing import load_images, sortImagesByMatch, sortImagesByMatchRevised
+    from PIL import Image
+    #import matplotlib.pyplot as plt
 
-    img_directory = "./images/sky-reduced"
+    img_directory = "./images/sky"
     imgs = load_images(img_directory)
-    result = sortImagesByMatch(imgs, canvas_matrix, split_dim, palette)
+    result = sortImagesByMatchRevised(imgs, canvas, split_dim, palette)
+    result_imgs = []
+    for filename in result :
+        result_imgs.append(Image.open(os.path.join(img_directory, filename)))
+    eprint(result)
+    """
     fig = plt.figure(figsize=(8, 8))
     columns = 5
     rows = 1
     for i in range(1, columns*rows + 1):
-        img = result[i - 1]
+        img = result_imgs[i - 1]
         fig.add_subplot(rows, columns, i)
         plt.imshow(img)
     plt.show()
-
+"""
     # TODO: To return a list of images in sorted order
     return []
 
@@ -86,16 +95,10 @@ def handle_query(palette, canvas):
 
 query = json.loads(input())
 
-palette = []
+palette = {color_id: make_perceptron_classifier(**color['perceptron']) for color_id, color in query['palette'].items()}
+canvas = query['canvas']
 
-color_id_to_index = {}
-
-for color_id, color in query['palette'].items():
-    index = len(palette)
-    palette.append(make_perceptron_classifier(**color['perceptron']))
-    color_id_to_index[color_id] = index
-
-canvas = [color_id_to_index[color_id] for color_id in query['canvas']]
+eprint(palette, canvas)
 
 # Pass back the search results
 
