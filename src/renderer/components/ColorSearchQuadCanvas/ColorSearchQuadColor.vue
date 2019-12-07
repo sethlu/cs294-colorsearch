@@ -1,8 +1,8 @@
 <template>
   <div class="color-search-quad-color">
-    <color-canvas :color="previewColor" v-if="color" />
+    <!-- <color-canvas :color="previewColor" v-if="color" /> -->
     <div class="color-search-quad-color-name" v-if="color">
-      <span>{{ color.name.split(" ").map(w => w[0]).join("") }}</span>
+      <span>{{ color.name.split(" ").map(w => w[0] + (w[1] || "")).join("") }}</span>
     </div>
   </div>
 </template>
