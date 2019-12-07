@@ -17,7 +17,7 @@
         <div class="color-name">+ New Color</div>
       </div>
     </div>
-    <div class="color-search-quad-canvas-area">
+    <div class="color-search-quad-canvas-area" @dblclick="clearCanvas()">
       <drop @drop="handleColorDrop(i, ...arguments)" v-for="cell, i in grid">
         <color-search-quad-color :color="cell && cell.colorId ? colorByColorId(cell.colorId) : null"/>
       </drop>
@@ -131,6 +131,16 @@ export default {
         });
       });
     },
+
+    clearCanvas: function () {
+      console.log("hello");
+      this.grid = [
+        null, null, null, null,
+        null, null, null, null,
+        null, null, null, null,
+        null, null, null, null
+      ];
+    }
   }
 };
 </script>
